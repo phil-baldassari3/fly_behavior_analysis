@@ -453,7 +453,7 @@ class fly_experiment():
     
 
     #methods
-    def stack_timeseries(self, params="all", behavior_scores="all", behavior_processed="all", savefile=False, name=''):
+    def stack_timeseries(self, params="all", behavior_scores="all", behavior_processed="all", persecond=False, framerate=30, savefile=False, name=''):
         """
         The default behavior of this method is to put every perframe feature including behavior scores into one dataframe that is returned.
         The params, behavior_scores, and behavior_processed arguments can be set to the name of one or a few (str or list) features instead of all features.
@@ -524,6 +524,9 @@ class fly_experiment():
             else:
                 stackdf = pd.merge(stackdf, df, left_index=True, right_index=True)
 
+        #per frame or per second
+        if persecond == True:
+            stackdf = stackdf.groupby(np.arange(len(stackdf))//framerate).mean()
 
         #saving df
         if savefile == True:
