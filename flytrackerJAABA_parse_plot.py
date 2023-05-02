@@ -721,7 +721,7 @@ class fly_experiment():
         # draw the graph
         pos = nx.circular_layout(G)
         weights = [G[u][v]['weight'] for u, v in G.edges()]
-        nx.draw(G, pos, width=((weights/nw_df['weight'].max()) * 15), edge_color='gray', node_color=[colors[int(node)] for node in G.nodes()])
+        nx.draw(G, pos, width=[(w/nw_df['weight'].max())*15 for w in weights], edge_color='gray', node_color=[colors[int(node)] for node in G.nodes()])
         nx.draw_networkx_labels(G, pos, font_size=12, font_color='white')
 
 
