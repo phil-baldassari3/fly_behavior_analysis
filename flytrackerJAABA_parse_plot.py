@@ -3,6 +3,7 @@
 #Can also plot tracks from the x and y data in the trx file
 
 #importing modules
+import re
 import scipy.io as spio
 import numpy as np
 import pandas as pd
@@ -450,6 +451,9 @@ class fly_experiment():
                 self.jaaba_scores.update({i.behavior_name: i.scores})
                 self.jaaba_processed.update({i.behavior_name: i.processed_scores})
 
+        #another object that can be referenced (list of fly ids)
+        self.flies = list(self.trxs.keys())
+
     
 
     #methods
@@ -457,6 +461,7 @@ class fly_experiment():
         """
         The default behavior of this method is to put every perframe feature including behavior scores into one dataframe that is returned.
         The params, behavior_scores, and behavior_processed arguments can be set to the name of one or a few (str or list) features instead of all features.
+        These can also be set to None if no parameters from that category are desired.
         If the savefile argument is False by default. If it is set to True a csv file will be saved.
         There is an optional name argument that will add to the begining of the filename and can be used to save file to different path.
         """
@@ -466,26 +471,32 @@ class fly_experiment():
         scoresls = []
         processedls = []
 
-        if not isinstance(params, list) and params != 'all':
+        if not isinstance(params, list) and params != 'all' and params != None:
             paramls.append(params)
         elif params == 'all':
             paramls = list(self.perframes.keys())
+        elif params == None:
+            paramls.append("")
         else:
             paramls = params
 
         
-        if not isinstance(behavior_scores, list) and behavior_scores != 'all':
+        if not isinstance(behavior_scores, list) and behavior_scores != 'all' and behavior_scores != None:
             scoresls.append(behavior_scores)
         elif behavior_scores == 'all':
             scoresls = list(self.jaaba_scores.keys())
+        elif behavior_scores == None:
+            scoresls.append("")
         else:
             scoresls = behavior_scores
 
 
-        if not isinstance(behavior_processed, list) and behavior_processed != 'all':
+        if not isinstance(behavior_processed, list) and behavior_processed != 'all' and behavior_processed != None:
             processedls.append(behavior_processed)
         elif behavior_processed == 'all':
             processedls = list(self.jaaba_processed.keys())
+        elif behavior_processed == None:
+            processedls.append("")
         else:
             processedls = behavior_processed
 
@@ -493,36 +504,37 @@ class fly_experiment():
         #stacking data
         stackdf = pd.DataFrame()
 
-        for i in paramls:
-            df = self.perframes[i]
+        if params != None:
+            for i in paramls:
+                df = self.perframes[i]
 
-            if 'trx' not in i:
-                df = df.add_prefix(i + '_')
+                if 'trx' not in i:
+                    df = df.add_prefix(i + '_')
 
-            if stackdf.empty:
-                stackdf = df
-            else:
-                stackdf = pd.merge(stackdf, df, left_index=True, right_index=True)
+                if stackdf.empty:
+                    stackdf = df
+                else:
+                    stackdf = pd.merge(stackdf, df, left_index=True, right_index=True)
 
-        
-        for i in scoresls:
-            df = self.jaaba_scores[i]
-            df = df.add_prefix(i + '_score_')
+        if behavior_scores != None:
+            for i in scoresls:
+                df = self.jaaba_scores[i]
+                df = df.add_prefix(i + '_score_')
 
-            if stackdf.empty:
-                stackdf = df
-            else:
-                stackdf = pd.merge(stackdf, df, left_index=True, right_index=True)
+                if stackdf.empty:
+                    stackdf = df
+                else:
+                    stackdf = pd.merge(stackdf, df, left_index=True, right_index=True)
 
+        if behavior_processed != None:
+            for i in processedls:
+                df = self.jaaba_processed[i]
+                df = df.add_prefix(i + '_processed_')
 
-        for i in processedls:
-            df = self.jaaba_processed[i]
-            df = df.add_prefix(i + '_processed_')
-
-            if stackdf.empty:
-                stackdf = df
-            else:
-                stackdf = pd.merge(stackdf, df, left_index=True, right_index=True)
+                if stackdf.empty:
+                    stackdf = df
+                else:
+                    stackdf = pd.merge(stackdf, df, left_index=True, right_index=True)
 
         #per frame or per second
         if persecond == True:
@@ -532,7 +544,7 @@ class fly_experiment():
         if savefile == True:
             superlist = paramls + scoresls + processedls
             stackdf.to_csv('{nme}_'.format(nme=name) + '_'.join(superlist) + '.csv', index=False)
-
+        
         return stackdf
 
         
@@ -618,118 +630,145 @@ class fly_experiment():
             plt.savefig('{name}_ethogram_{flies}.png'.format(name=filename, flies=str(fly)))
 
 
-                
-    def network(self, dist_threshold=2, behavior=None, behavior_threshold=0.5, burnin=0, framerate=30, plottitle="", showplot=False, saveplot=True, filename=""):
-        """
-        Method using the dcenter parameter to find interactions between flies.
-        Interactions can be coupled to a chosen behavior for a more acurate fly-to-fly behavioral network.
-        The distance threshold is the distance between two flies that counts as an interaction.
-        Burnin can be set to the starting SECOND not frame.
-        Framrate defaults to 30. Check the framrate of your experiment.
-        """
-
-        #getting pairs
-        colnames = list(self.perframes['dcenter'].columns)
-        colnames = ['dcenter_' + str(i) for i in colnames]
-
-        pairs = list(itertools.combinations(colnames, 2))
-        connections = {}
-        for i in pairs:
-            connections.update({i:0})
-
-        
-        #stacking timeseries of dcenter and behavior
-        if behavior == None:
-            stack = self.perframes['dcenter']
-            stack = stack.add_prefix('dcenter_')
-
-        else:
-            stack = self.stack_timeseries(params='dcenter', behavior_scores=[], behavior_processed=behavior)
-
-        #making stack per second
-        stack = stack.groupby(np.arange(len(stack))//framerate).mean()
-        stack = stack[burnin:]
-
-        #selecting for behavior, dropping behavior columns
-        if behavior != None:
-            behavior_df = stack.filter(like=behavior, axis=1)
-            stack['boolean'] = behavior_df.apply(lambda row: any(val >= behavior_threshold for val in row.values), axis=1)
-
-            stack = stack.drop(stack[stack.boolean == False].index)
-
-            stack = stack.loc[:, stack.columns.str.contains('dcenter_')]
-
-        #finding interactions
-        cols_below_threshold = lambda row: list(stack.columns[row <= dist_threshold])
-        stack['interactions'] = stack.apply(cols_below_threshold, axis=1)
-        
-        stack = stack[stack['interactions'].map(lambda d: len(d)) > 1]
-        
-
-        #getting weights based on frequency of interactions (pairwise)
-        for i in stack['interactions'].to_list():
-            row_tuples = list(itertools.combinations(i, 2))
-
-            for j in row_tuples:
-                connections[j] += 1
-        
-        #making network df
-        nw_df = pd.DataFrame.from_dict(connections, orient='index', columns=['weight'])
-        nw_df = nw_df.reset_index().rename(columns={'index': 'tuples'})
-
-        #nw_df = nw_df.drop(nw_df[nw_df['weight'] == 0].index)
-
-        nw_df[['node1', 'node2']] = nw_df['tuples'].apply(lambda x: pd.Series([x[0], x[1]]))
-        nw_df = nw_df.drop('tuples', axis=1)
-        nw_df = nw_df.replace(to_replace='dcenter_', value='', regex=True)
-        nw_df = nw_df.loc[:,['node1','node2','weight']]
 
 
-        #formatting plot
-        plt.figure(figsize=(8,8))
-        ax = plt.gca()
-        ax.set_title(plottitle)
+
+    def network(self, dist_threshold=float('inf'), behavior=None, behavior_threshold=0.5, burnin=0, framerate=30, plottitle="", showplot=False, saveplot=True, filename=""):
+            """
+            
+            """
+
+            #function for sorted() function key
+            def sort_key(lsitem):
+
+                number = re.findall(r'\d+', lsitem)[0]
+
+                return int(number)
 
 
-        ###making network
-        # create an empty undirected graph
-        G = nx.Graph()
+            #warning message
+            if dist_threshold == float('inf') and behavior == None:
+                print("WARNING: it is not recommended to create a proximity network without a distance threshold set.")
 
-        #node colors
-        colors = {}
-        for k in self.sex.keys():
-            if self.sex[k] == 'm':
-                colors.update({k:'blue'})
+            #getting pairs
+            colnames = list(self.perframes['dcenter'].columns)
+            colnames = ['dcenter_' + str(i) for i in colnames]
+
+            pairs = list(itertools.combinations(colnames, 2))
+            connections = {}
+            for i in pairs:
+                connections.update({i:0})
+
+            
+            #stacking timeseries of dcenter and behavior
+            if behavior == None:
+                stack = self.perframes['dcenter']
+                stack = stack.add_prefix('dcenter_')
+
             else:
-                colors.update({k:'red'})
+                stack = self.stack_timeseries(params='dcenter', behavior_scores=[], behavior_processed=behavior)
 
-        # add nodes with their respective colors, ordering nodes by fly id
-        nodes = list(set(nw_df['node1']).union(set(nw_df['node2'])))
-        nodes = [int(i) for i in nodes]
-        nodes.sort()
-        nodes = [str(i) for i in nodes]
-
-        for node in nodes:
-            col = colors.get(node, 'gray') # use the color from the dictionary, or default to gray
-            G.add_node(node, color=col)
-        
-
-        # add edges with their respective weights
-        for index, row in nw_df.iterrows():
-            G.add_edge(row['node1'], row['node2'], weight=row['weight'])
-
-        # draw the graph
-        pos = nx.circular_layout(G)
-        weights = [G[u][v]['weight'] for u, v in G.edges()]
-        nx.draw(G, pos, width=[(w/nw_df['weight'].max())*15 for w in weights], edge_color='gray', node_color=[colors[int(node)] for node in G.nodes()])
-        nx.draw_networkx_labels(G, pos, font_size=12, font_color='white')
+            #making stack per second
+            stack = stack.groupby(np.arange(len(stack))//framerate).mean()
+            stack = stack[burnin:]
 
 
-        if showplot == True:
-            plt.show()
 
-        if saveplot == True:
-            plt.savefig('{name}_{d}mm_behavior_{b}_network.png'.format(name=filename, d=str(dist_threshold), b=behavior))
+
+            #interactions list
+            interactions_raw = []
+
+            #looping through flies
+            for i in self.flies:
+
+                #empty df
+                df = pd.DataFrame()
+
+                #filtering for behavior unless no behavior parameter is given
+                if behavior != None:
+                    column_name = "{b}_processed_{f}".format(b=behavior,f=str(i))
+                    df = pd.concat([df, stack.loc[stack[column_name] > behavior_threshold]])
+                else:
+                    df = pd.concat([df, stack])
+
+                #new interaction column
+                df['interactions'] = df.apply(lambda row: [col for col in df.columns if col.startswith('dcenter_') and row[col] == row['dcenter_{f}'.format(f=str(i))] and row[col] <= dist_threshold], axis=1)
+
+                #adding interactions to list
+                interactions_raw += df['interactions'].to_list()
+
+
+
+
+            #cleaning interactions list
+            interactions = [tuple(sorted(item, key=sort_key)) for item in interactions_raw if len(item) == 2]
+
+            #getting weights based on frequency of interactions (pairwise)
+            for i in interactions:
+                connections[i] += 1
+
+
+
+            #making network df
+            nw_df = pd.DataFrame.from_dict(connections, orient='index', columns=['weight'])
+            nw_df = nw_df.reset_index().rename(columns={'index': 'tuples'})
+
+            
+
+            #nw_df = nw_df.drop(nw_df[nw_df['weight'] == 0].index)
+
+            nw_df[['node1', 'node2']] = nw_df['tuples'].apply(lambda x: pd.Series([x[0], x[1]]))
+            nw_df = nw_df.drop('tuples', axis=1)
+            nw_df = nw_df.replace(to_replace='dcenter_', value='', regex=True)
+            nw_df = nw_df.loc[:,['node1','node2','weight']]
+            
+
+
+            #formatting plot
+            plt.figure(figsize=(8,8))
+            ax = plt.gca()
+            ax.set_title(plottitle)
+
+
+            ###making network
+            # create an empty undirected graph
+            G = nx.Graph()
+
+            #node colors
+            colors = {}
+            for k in self.sex.keys():
+                if self.sex[k] == 'm':
+                    colors.update({k:'blue'})
+                else:
+                    colors.update({k:'red'})
+
+            # add nodes with their respective colors, ordering nodes by fly id
+            nodes = list(set(nw_df['node1']).union(set(nw_df['node2'])))
+            nodes = [int(i) for i in nodes]
+            nodes.sort()
+            nodes = [str(i) for i in nodes]
+
+            for node in nodes:
+                col = colors.get(node, 'gray') # use the color from the dictionary, or default to gray
+                G.add_node(node, color=col)
+            
+
+            # add edges with their respective weights
+            for index, row in nw_df.iterrows():
+                G.add_edge(row['node1'], row['node2'], weight=row['weight'])
+
+            # draw the graph
+            pos = nx.circular_layout(G)
+            weights = [G[u][v]['weight'] for u, v in G.edges()]
+            nx.draw(G, pos, width=[(w/nw_df['weight'].max())*15 for w in weights], edge_color='gray', node_color=[colors[int(node)] for node in G.nodes()])
+            nx.draw_networkx_labels(G, pos, font_size=12, font_color='white')
+
+
+            if showplot == True:
+                plt.show()
+
+            if saveplot == True:
+                plt.savefig('{name}_{d}mm_behavior_{b}_network.png'.format(name=filename, d=str(dist_threshold), b=behavior))
 
 
 
