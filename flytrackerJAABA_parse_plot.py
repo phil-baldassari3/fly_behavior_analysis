@@ -143,18 +143,28 @@ class struct2df():
 
 
 
-    def save_perframe_or_behavior(self, name=''):
+    def save_perframe_or_behavior(self, persecond=False, framerate=30, name=''):
         """
         Method saves .param_df, a dataframe of a feature perframe for each fly, to a csv file.
         There is an optional name argument that will add to the begining of the filename and can be used to save file to different path.
         """
 
         if self.dtype == 'perframe':
-            self.param_df.to_csv('{nme}_'.format(nme=name) + self.param_name + ".csv", index=False)
+            if persecond == True:
+                df_perf = self.param_df.groupby(np.arange(len(self.param_df))//framerate).mean()
+                df_perf.to_csv('{nme}_persecond_'.format(nme=name) + self.param_name + ".csv", index=False)
+            else:
+                self.param_df.to_csv('{nme}_'.format(nme=name) + self.param_name + ".csv", index=False)
 
         elif self.dtype == 'scores':
-            self.scores.to_csv('{nme}_'.format(nme=name) + self.behavior_name + "_scores.csv", index=False)
-            self.processed_scores.to_csv('{nme}_'.format(nme=name) + self.behavior_name + "_processed_scores.csv", index=False)
+            if persecond == True:
+                df_scores = self.scores.groupby(np.arange(len(self.scores))//framerate).mean()
+                df_proc = self.processed_scores.groupby(np.arange(len(self.processed_scores))//framerate).mean()
+                df_scores.to_csv('{nme}_persecond_'.format(nme=name) + self.behavior_name + "_scores.csv", index=False)
+                df_proc.to_csv('{nme}_persecond_'.format(nme=name) + self.behavior_name + "_processed_scores.csv", index=False)
+            else:
+                self.scores.to_csv('{nme}_'.format(nme=name) + self.behavior_name + "_scores.csv", index=False)
+                self.processed_scores.to_csv('{nme}_'.format(nme=name) + self.behavior_name + "_processed_scores.csv", index=False)
 
         else:
             print("Method does not support this data. Make sure data is from the perframe directory.")
@@ -687,7 +697,7 @@ class fly_experiment():
                 #filtering for behavior unless no behavior parameter is given
                 if behavior != None:
                     column_name = "{b}_processed_{f}".format(b=behavior,f=str(i))
-                    df = pd.concat([df, stack.loc[stack[column_name] > behavior_threshold]])
+                    df = pd.concat([df, stack.loc[stack[column_name] >= behavior_threshold]])
                 else:
                     df = pd.concat([df, stack])
 
