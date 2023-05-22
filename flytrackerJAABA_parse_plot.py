@@ -8,8 +8,24 @@ import scipy.io as spio
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import networkx as nx
 import itertools
+#networkx can cause some problems, to avoid these networkx is optional for this program to run
+try:
+    import networkx as nx
+    if not hasattr(nx, 'draw'):
+        raise AttributeError("The draw() function is not available in your version of the NetworkX library.\nThe network() method is therefore not available.\nPlease use pip to install: `pip install netowrkx`.")
+except ImportError:
+    print("Warning: NetworkX module not found. The network() method is therefore not available.\nPlease use pip to install: `pip install netowrkx`.")
+except AttributeError as e:
+    print("Warning:", str(e))
+
+
+
+
+
+
+
+
 
 
 #class for extracting matlab structure type data
@@ -233,7 +249,7 @@ class struct2df():
 
 
         else:
-            print("Method does not support this data. Make sure data is from the trx file and x and y corrdinates have been extracted.")
+            print("Method does not support this data. Make sure data is from the trx file and x and y corrdinates have been extracted using the .extract_trx_param() method.")
         
 
 
