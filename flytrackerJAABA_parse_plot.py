@@ -190,6 +190,7 @@ class struct2df():
     def plot_tracks(self, bysex=False, burnin=0, plottitle='', saveplot=True, filename='', showplot=False):
         """
         Method plots tracks of flies using the x,y coordinates (by pixels or mm).
+        The plot will be made using the mm data if both pixel and mm data have been extracted but will plot the pixel data if mm x and/or y data have not been extracted
         The optional argument bysex is a boolean argument that indicates whether to color the tracks by the sex of the fly
         burnin is the starting frame for which the plotting starts. it defaults to zero, the first frame.
         """
@@ -197,10 +198,12 @@ class struct2df():
         if 'x_1' in self.param_df.columns and 'y_1' in self.param_df.columns or ('x_mm_1' in self.param_df.columns and 'y_mm_1' in self.param_df.columns):
 
             #getting the parameter to plot
-            if 'x_1' in self.param_df.columns:
-                measure = ''
-            elif 'x_mm_1' in self.param_df.columns:
+            if 'x_mm_1' and 'y_mm_1' in self.param_df.columns:
                 measure = 'mm_'
+                units = 'mm'
+            elif 'x_1' and 'y_1' in self.param_df.columns:
+                measure = ''
+                units = 'pixels'
 
             #setting up figure
             fig = plt.figure(figsize=(9,9))
@@ -238,12 +241,14 @@ class struct2df():
                     plt.plot(x, y, alpha=0.7)
 
             ax.set_aspect('equal', adjustable='box')
+            plt.xlabel('X ({})'.format(units))
+            plt.ylabel('Y ({})'.format(units))
             plt.title(plottitle)
 
-            if saveplot == True:
+            if saveplot:
                 plt.savefig('{name}{unit}x_y_tracks.png'.format(name=filename, unit=measure))
             
-            if showplot == True:
+            if showplot:
                 plt.show()
 
 
@@ -251,6 +256,109 @@ class struct2df():
         else:
             print("Method does not support this data. Make sure data is from the trx file and x and y corrdinates have been extracted using the .extract_trx_param() method.")
         
+
+
+    def plot_density(self, resolution=5, burnin=0, plottype="heatmap", plottitle='', showplot=False, saveplot=True, filename=''):
+        """
+        Method plots the frequency that locations on the arena were occupied by flies using the x_mm and y_mm parameters.
+        A temparary dataframe is made using these parameters and transformed into a 2D histogram. This histogram plots the density either as a heatmap or 3D surface map.
+        The `resolution` defaults to 5 which represents 2D partitions of the arena of size 5mmx5mm. This can be changed to desired resolution.
+        The `burnin` defaults to 0 and can be set to remove the desired number of frames from the beginning of the data. Units are FRAMES!
+        The `plottype` defaults to "heatmap" but can be changed to "3D" for a 3D surface plot. Note that the surface plot is only shown but not automatically saved.
+        There is no `plottitle` by default but one can be set. The `filename` defaults to "_density_heatmap.png" but additional text can be added to the beginning using the `filename` parameter.
+        The `showplot` and `saveplot` parameters can be set as a bool. Please note that the 3D plot is shown but cannot be saved.
+        """
+
+        if 'x_mm_1' in self.param_df.columns and 'y_mm_1' in self.param_df.columns:
+
+            #filter x and y mm data out of self.param_df
+            cols = self.param_df.filter(regex='^(x_mm_|y_mm_)').columns.tolist()
+            df = self.param_df[cols]
+            df = df[burnin:]
+
+            #number of flies
+            num_individuals = len(self.trx_ls)
+
+            #list for individual dfs
+            individual_dfs = []
+
+            #making dfs for each individual
+            for i in range(num_individuals):
+                #get column name
+                x_col_name = 'x_mm_' + str(i+1)
+                y_col_name = 'y_mm_' + str(i+1)
+                
+                #making df
+                individual_df = pd.DataFrame({'x': df[x_col_name], 'y': df[y_col_name]})
+                
+                #appending to df list
+                individual_dfs.append(individual_df)
+
+            #combining dataframes
+            all_df = pd.concat(individual_dfs)
+            all_df.dropna(inplace=True)
+
+            #making 2D histogram
+            x_bins = int((all_df['x'].max() - all_df['x'].min()) / resolution)
+            y_bins = int((all_df['y'].max() - all_df['y'].min()) / resolution)
+
+            num_bins = (x_bins, y_bins)
+
+            hist, xedges, yedges = np.histogram2d(all_df['x'], all_df['y'], bins=num_bins)
+
+            #normalize histogram
+            hist_norm = hist/(np.sum(hist))
+
+            #making histogram and plotting
+            if plottype == "heatmap":
+                
+                #Plot the heatmap Note: must be transposed because np.histogram2d does not follow normal cartesian convention
+                plt.imshow(hist_norm.T, cmap='plasma', interpolation='nearest', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], origin='lower')
+                cbar = plt.colorbar()
+                cbar.set_label('Frequency')
+
+                #labels
+                plt.xlabel('X (mm)')
+                plt.ylabel('Y (mm)')
+                plt.title(plottitle)
+
+                if saveplot:
+                    plt.savefig('{}_density_heatmap.png'.format(filename))
+
+                if showplot:
+                    plt.show()
+
+
+
+            elif plottype == "3D":
+                #creating 3D figure
+                fig = plt.figure(figsize=(10, 8))
+                ax = fig.add_subplot(111, projection='3d')
+
+                # Create the X, Y meshgrid with reversed x-axis limits
+                x_, y_ = np.meshgrid(xedges[:-1], yedges[:-1])
+
+                # Plot the 3D surface  Note: must be transposed because np.histogram2d does not follow normal cartesian convention
+                ax.plot_surface(x_, y_, hist_norm.T, cmap='plasma')
+
+                # Set the axis labels
+                ax.set_xlabel('X (mm)')
+                ax.set_ylabel('Y (mm)')
+                ax.set_zlabel('Frequency')
+                plt.title(plottitle)
+
+                #Show plot
+                plt.show()
+                
+
+            else:
+                print('Incorrect plottype input. Please use either "heatmap" or "3D".')
+
+        else:
+            print("Method does not support this data. Make sure data is from the trx file and x and y corrdinates have been extracted using the .extract_trx_param() method.")
+        
+
+
 
 
     def plot_timeseries(self, fly='all', persecond=True, framerate=30, scorethreshold=None, burnin=0, plottitle='', saveplot=True, filename='', showplot=False):
@@ -334,10 +442,10 @@ class struct2df():
             plt.ylabel(self.param_name)
             plt.title(plottitle)
 
-            if saveplot == True:
+            if saveplot:
                 plt.savefig('{name}{default}_perframe_plot.png'.format(name=filename, default=self.param_name))
             
-            if showplot == True:
+            if showplot:
                 plt.show()
 
         
@@ -422,10 +530,10 @@ class struct2df():
                 plt.ylabel(self.behavior_name + ylabelname)
                 plt.title(plottitle)
 
-                if saveplot == True:
+                if saveplot:
                     plt.savefig('{name}{default}_{flies}_{thing}_plot.png'.format(name=filename, default=self.param_name, flies=str(fly), thing=thing2plot))
                 
-                if showplot == True:
+                if showplot:
                     plt.show()
 
 
@@ -649,10 +757,10 @@ class fly_experiment():
             for obj in leg.get_lines():
                 obj.set_linewidth(5)
 
-        if showplot == True:
+        if showplot:
             plt.show()
 
-        if saveplot == True:
+        if saveplot:
             plt.savefig('{name}_ethogram_{flies}.png'.format(name=filename, flies=str(fly)))
 
 
@@ -786,15 +894,22 @@ class fly_experiment():
             # draw the graph
             pos = nx.circular_layout(G)
             weights = [G[u][v]['weight'] for u, v in G.edges()]
-            nx.draw(G, pos, width=[(w/nw_df['weight'].max())*15 for w in weights], edge_color='gray', node_color=[colors[int(node)] for node in G.nodes()])
-            nx.draw_networkx_labels(G, pos, font_size=12, font_color='white')
+
+            try:
+                nx.draw(G, pos, width=[(w/nw_df['weight'].max())*15 for w in weights], edge_color='gray', node_color=[colors[int(node)] for node in G.nodes()])
+                nx.draw_networkx_labels(G, pos, font_size=12, font_color='white')
+
+                if saveplot:
+                    plt.savefig('{name}_{d}mm_behavior_{b}_network.png'.format(name=filename, d=str(dist_threshold), b=behavior))
+
+                if showplot:
+                    plt.show()
+
+            except ZeroDivisionError:
+                plt.close()
+                print("Thresholds set are too strict. No interactions found with these thresholds. Could not generate network.")
 
 
-            if showplot == True:
-                plt.show()
-
-            if saveplot == True:
-                plt.savefig('{name}_{d}mm_behavior_{b}_network.png'.format(name=filename, d=str(dist_threshold), b=behavior))
 
 
 
