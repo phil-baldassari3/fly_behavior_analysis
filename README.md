@@ -3,7 +3,7 @@ Scripts for working with Flytracker, JAABA, and their output data
 
 _____________________________
 
-flytrackerJAABA_parse_plot.py 
+fly2py.py 
 
 The main script in this repo. This is a python module that is able to extract and parse data from the Flytracker JAABA output files and the JAABA score output files.
 The module can also be used to plot tracks, plot behavior scores, plot ethodgrams, and plot interaction networks.
