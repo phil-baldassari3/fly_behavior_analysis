@@ -5,6 +5,7 @@
 #importing modules
 import re
 import scipy.io as spio
+import mat73
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -27,6 +28,75 @@ except AttributeError as e:
 
 
 
+#helper functions
+def _dict2list_of_dicts(input_dict):
+    """
+    Private function used in the class `struct2df` to transpose a dictionary of lists to a list of dictionaries.
+    This is for converting the data in mat 7.3 files which are opened with the module mat73. This modules returns a dictioary where each key represents a column.
+    However, this module expects a sepearte dictioary for each row, hence the need for transposition. The module converts dictioaries as follows:
+    e.g. {'a': [1, 2, 3], 'b': [4, 5, 6]} --> [{'a': 1, 'b': 4}, {'a': 2, 'b': 5}, {'a': 3, 'b': 6}]
+    """
+
+    #list of input dictionary keys
+    keys = list(input_dict.keys())
+    #finding the length of the list values of the input dictionary (note: all values are lists of the same length, this line finds the length of the first value)
+    length = len(input_dict[keys[0]])
+
+    output_list = []
+
+    #looping through number of items in the list values to make a dictionary for each item (row)
+    for i in range(length):
+        #generating temp dictionary by iterating through keys and grabbing items for that row
+        temp_dict = {key: input_dict[key][i] for key in keys}
+        #appending row dictionary to list
+        output_list.append(temp_dict)
+
+    return output_list
+
+
+def _listofdicts_clean_scalar_arrays(listofdicts):
+    """
+    Private function used in the class `struct2df` to clean the the converted list of dictioaries from `_dict2list_of_dicts`.
+    The mat73 module places numeric values into numpy arrays of shape ().
+    This function iterates through values in the list of dictioaries and converts the () arrays into numeric values.
+    If the value is a whole number this function also converts it to an integer.
+    e.g. [{'a':np.array(1.0), 'b':np.array([1, 2, 3])}] --> [{'a':1, 'b':np.array([1, 2, 3])}]
+    """
+    
+    def _scalar_array2num(value):
+        """
+        Helper function that converts an array of shapr () into a numeric and converts whole number floats to integers.
+        Items other than np arrays of shapr () are left alone.
+        """
+        if isinstance(value, np.ndarray) and value.shape == ():
+            scalar_value = value.item()
+            if isinstance(scalar_value, float) and scalar_value.is_integer():
+                return int(scalar_value)
+            return scalar_value
+        return value
+
+    output_list = []
+
+    #looping through dictionaries in list
+    for dictionary in listofdicts:
+        output_dict = {}
+
+        #looping through key,value pairs in dictionary
+        for key, value in dictionary.items():
+            #direct assignment to output dictioary with converted values (if conversion was needed)
+            output_dict[key] = _scalar_array2num(value)
+        #appending converted dictionary to list
+        output_list.append(output_dict)
+
+    return output_list
+
+
+
+
+
+
+
+
 
 #class for extracting matlab structure type data
 class struct2df():
@@ -35,13 +105,28 @@ class struct2df():
         """
         This class takes in a .mat structure file from the Flytracker for JAABA output and extracts the data.
         First the structure is converted to a multidimensional dictionary using the scipy.io module.
+        For mat7.3 files the mat73 module is used to convert the data. Note that this only works on trx files currently.
         The dictionary is parsed to ether extract specific data or extract all the data depending on the type of file.
         With trx files, queried data can be extracted or a dataframe for each fly can be exported.
         With perframe files, the parameter of the file selected is extracted into a dataframe.
         """
 
         #structure to dictionary
-        self.mat_dict = spio.loadmat(matfile, simplify_cells=True)
+        try:
+            self.mat_dict = spio.loadmat(matfile, simplify_cells=True)
+
+        except NotImplementedError:
+            print("\nWARNING: The input file is mat version 7.3 which must be converted to the scipy.loadmat output format.\nCurrently, only trx files can be converted. Other mat7.3 data files are not currently supported by this module.\n")
+            
+            #opening mat file with mat73
+            self.mat_dict = mat73.loadmat(matfile)
+
+            #transposing the dictionary of lists to list of dictionaries
+            temp_ls_of_dicts = _dict2list_of_dicts(self.mat_dict['trx'])
+
+            #cleaning scalar arrays by direct assignment
+            self.mat_dict['trx'] = _listofdicts_clean_scalar_arrays(temp_ls_of_dicts)
+
 
 
         #struct2df objects
