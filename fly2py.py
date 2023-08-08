@@ -101,7 +101,7 @@ def _listofdicts_clean_scalar_arrays(listofdicts):
 #class for extracting matlab structure type data
 class struct2df():
 
-    def __init__(self, matfile):
+    def __init__(self, matfile, separate_chambers=None):
         """
         This class takes in a .mat structure file from the Flytracker for JAABA output and extracts the data.
         First the structure is converted to a multidimensional dictionary using the scipy.io module.
@@ -109,6 +109,10 @@ class struct2df():
         The dictionary is parsed to ether extract specific data or extract all the data depending on the type of file.
         With trx files, queried data can be extracted or a dataframe for each fly can be exported.
         With perframe files, the parameter of the file selected is extracted into a dataframe.
+        The optional parameter `separate_chambers` is for flytracker data with multiple arenas. Default is None.
+        To differentiate between the arenas pass a dictionary of chamber number keys and list of ids as values.
+        The key must be a string and the value must be a list of integers representing the fly id.
+        e.g. {'1':[1,2,3,4,5,6,7], 'B':[8,9,10,11,12,13,14]}
         """
 
         #structure to dictionary
@@ -131,6 +135,7 @@ class struct2df():
 
         #struct2df objects
         self.trx_ls = []
+        self.chambers = separate_chambers
         self.param_df = pd.DataFrame()
         self.scores = pd.DataFrame()
         self.processed_scores = pd.DataFrame()
@@ -278,6 +283,7 @@ class struct2df():
         The plot will be made using the mm data if both pixel and mm data have been extracted but will plot the pixel data if mm x and/or y data have not been extracted
         The optional argument bysex is a boolean argument that indicates whether to color the tracks by the sex of the fly
         burnin is the starting frame for which the plotting starts. it defaults to zero, the first frame.
+        If `struct2df` was instanciated with a `separate_chambers` dictionary, multiple plots will be generated.
         """
 
         if 'x_1' in self.param_df.columns and 'y_1' in self.param_df.columns or ('x_mm_1' in self.param_df.columns and 'y_mm_1' in self.param_df.columns):
@@ -290,18 +296,22 @@ class struct2df():
                 measure = ''
                 units = 'pixels'
 
-            #setting up figure
-            fig = plt.figure(figsize=(9,9))
-            ax = fig.add_subplot()
-            if bysex == True:
 
-                #plotting x and y coordinates as a line plot
-                for idx, i in enumerate(self.trx_ls):
+            #single chamber data or multi-chamber data in one plot
+            if self.chambers == None:
 
-                    x = self.param_df['x_{unit}{id}'.format(unit=measure, id=str(int(idx+1)))].to_list()[burnin:]
-                    y = self.param_df['y_{unit}{id}'.format(unit=measure, id=str(int(idx+1)))].to_list()[burnin:]
+                #setting up figure
+                fig = plt.figure(figsize=(9,9))
+                ax = fig.add_subplot()
 
-                    if bysex == True:
+                if bysex == True:
+
+                    #plotting x and y coordinates as a line plot
+                    for idx, i in enumerate(self.trx_ls):
+
+                        x = self.param_df['x_{unit}{id}'.format(unit=measure, id=str(int(idx+1)))].to_list()[burnin:]
+                        y = self.param_df['y_{unit}{id}'.format(unit=measure, id=str(int(idx+1)))].to_list()[burnin:]
+
                         if 'm' in i['sex'].to_list():
                             sex = 'm'
                             colr = 'blue'
@@ -310,31 +320,100 @@ class struct2df():
                             colr = 'red'
                         plt.plot(x, y, label = sex, color=colr, alpha=0.7)
 
-                #formating and showing the plot
-                handles, labels = plt.gca().get_legend_handles_labels()
-                by_label = dict(zip(labels, handles))
-                plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1, 0.5), loc="center left")
+                    #formating and showing the plot
+                    handles, labels = plt.gca().get_legend_handles_labels()
+                    by_label = dict(zip(labels, handles))
+                    plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1, 0.5), loc="center left")
 
+                else:
+
+                    #plotting x and y coordinates as a line plot
+                    for idx, i in enumerate(self.trx_ls):
+
+                        x = self.param_df['x_{unit}{id}'.format(unit=measure, id=str(int(idx+1)))].to_list()[burnin:]
+                        y = self.param_df['y_{unit}{id}'.format(unit=measure, id=str(int(idx+1)))].to_list()[burnin:]
+
+                        plt.plot(x, y, alpha=0.7)
+
+                ax.set_aspect('equal', adjustable='box')
+                plt.xlabel('X ({})'.format(units))
+                plt.ylabel('Y ({})'.format(units))
+                plt.title(plottitle)
+
+                if saveplot:
+                    plt.savefig('{name}{unit}x_y_tracks.png'.format(name=filename, unit=measure))
+                
+                if showplot:
+                    plt.show()
+            
+            
+            #separate plots for separate chambers
             else:
 
-                #plotting x and y coordinates as a line plot
-                for idx, i in enumerate(self.trx_ls):
+                """ #setting up figure
+                fig = plt.figure(figsize=(9,9))
+                ax = fig.add_subplot() """
 
-                    x = self.param_df['x_{unit}{id}'.format(unit=measure, id=str(int(idx+1)))].to_list()[burnin:]
-                    y = self.param_df['y_{unit}{id}'.format(unit=measure, id=str(int(idx+1)))].to_list()[burnin:]
+                if bysex == True:
 
-                    plt.plot(x, y, alpha=0.7)
+                    #plotting x and y coordinates as a line plot
+                    for cham in list(self.chambers.keys()):
+                        #setting up figure
+                        fig = plt.figure(figsize=(9,9))
+                        ax = fig.add_subplot()
+                        for indv in self.chambers[cham]:
 
-            ax.set_aspect('equal', adjustable='box')
-            plt.xlabel('X ({})'.format(units))
-            plt.ylabel('Y ({})'.format(units))
-            plt.title(plottitle)
+                            x = self.param_df['x_{unit}{id}'.format(unit=measure, id=str(int(indv)))].to_list()[burnin:]
+                            y = self.param_df['y_{unit}{id}'.format(unit=measure, id=str(int(indv)))].to_list()[burnin:]
 
-            if saveplot:
-                plt.savefig('{name}{unit}x_y_tracks.png'.format(name=filename, unit=measure))
-            
-            if showplot:
-                plt.show()
+                            if 'm' in self.trx_ls[int(indv-1)]['sex'].to_list():
+                                sex = 'm'
+                                colr = 'blue'
+                            elif 'f' in self.trx_ls[int(indv-1)]['sex'].to_list():
+                                sex = 'f'
+                                colr = 'red'
+                            plt.plot(x, y, label = sex, color=colr, alpha=0.7)
+
+                        #formating and showing the plot
+                        handles, labels = plt.gca().get_legend_handles_labels()
+                        by_label = dict(zip(labels, handles))
+                        plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1, 0.5), loc="center left")
+                        ax.set_aspect('equal', adjustable='box')
+                        plt.xlabel('X ({})'.format(units))
+                        plt.ylabel('Y ({})'.format(units))
+                        plt.title(plottitle + " Chamber {ch}".format(ch=cham))
+
+                        if saveplot:
+                            plt.savefig('{name}_Chamber_{ch}_{unit}x_y_tracks.png'.format(name=filename, ch=cham, unit=measure))
+                        
+                        if showplot:
+                            plt.show()
+
+
+                else:
+
+                    #plotting x and y coordinates as a line plot
+                    for cham in list(self.chambers.keys()):
+                        #setting up figure
+                        fig = plt.figure(figsize=(9,9))
+                        ax = fig.add_subplot()
+                        for indv in self.chambers[cham]:
+
+                            x = self.param_df['x_{unit}{id}'.format(unit=measure, id=str(int(indv)))].to_list()[burnin:]
+                            y = self.param_df['y_{unit}{id}'.format(unit=measure, id=str(int(indv)))].to_list()[burnin:]
+
+                            plt.plot(x, y, alpha=0.7)
+
+                        ax.set_aspect('equal', adjustable='box')
+                        plt.xlabel('X ({})'.format(units))
+                        plt.ylabel('Y ({})'.format(units))
+                        plt.title(plottitle + " Chamber {ch}".format(ch=cham))
+
+                        if saveplot:
+                            plt.savefig('{name}_Chamber_{ch}_{unit}x_y_tracks.png'.format(name=filename, ch=cham, unit=measure))
+                        
+                        if showplot:
+                            plt.show()
 
 
 
@@ -343,13 +422,14 @@ class struct2df():
         
 
 
-    def plot_density(self, resolution=5, burnin=0, plottype="heatmap", plottitle='', showplot=False, saveplot=True, filename=''):
+    def plot_density(self, resolution=5, burnin=0, plottype="heatmap", chamber="all", plottitle='', showplot=False, saveplot=True, filename=''):
         """
         Method plots the frequency that locations on the arena were occupied by flies using the x_mm and y_mm parameters.
         A temparary dataframe is made using these parameters and transformed into a 2D histogram. This histogram plots the density either as a heatmap or 3D surface map.
         The `resolution` defaults to 5 which represents 2D partitions of the arena of size 5mmx5mm. This can be changed to desired resolution.
         The `burnin` defaults to 0 and can be set to remove the desired number of frames from the beginning of the data. Units are FRAMES!
         The `plottype` defaults to "heatmap" but can be changed to "3D" for a 3D surface plot. Note that the surface plot is only shown but not automatically saved.
+        The `chamber` defaults to all and will plot all arenas if there are multiple. This can be set to a string which is the name of the chamber you wish to plot.
         There is no `plottitle` by default but one can be set. The `filename` defaults to "_density_heatmap.png" but additional text can be added to the beginning using the `filename` parameter.
         The `showplot` and `saveplot` parameters can be set as a bool. Please note that the 3D plot is shown but cannot be saved.
         """
@@ -358,26 +438,50 @@ class struct2df():
 
             #filter x and y mm data out of self.param_df
             cols = self.param_df.filter(regex='^(x_mm_|y_mm_)').columns.tolist()
+
+            #selecting chamber
+            if chamber != "all":
+                cols = [col for col in self.param_df.columns if int(col.split('_')[-1]) in self.chambers[chamber]]
+
+            #filtering the df
             df = self.param_df[cols]
             df = df[burnin:]
 
+
             #number of flies
-            num_individuals = len(self.trx_ls)
+            if chamber != "all":
+                num_individuals = len(self.chambers[chamber])
+            else:
+                num_individuals = len(self.trx_ls)
 
             #list for individual dfs
             individual_dfs = []
 
+
             #making dfs for each individual
-            for i in range(num_individuals):
-                #get column name
-                x_col_name = 'x_mm_' + str(i+1)
-                y_col_name = 'y_mm_' + str(i+1)
-                
-                #making df
-                individual_df = pd.DataFrame({'x': df[x_col_name], 'y': df[y_col_name]})
-                
-                #appending to df list
-                individual_dfs.append(individual_df)
+            if chamber != "all":
+                for i in self.chambers[chamber]:
+                    #get column name
+                    x_col_name = 'x_mm_' + str(i)
+                    y_col_name = 'y_mm_' + str(i)
+                    
+                    #making df
+                    individual_df = pd.DataFrame({'x': df[x_col_name], 'y': df[y_col_name]})
+                    
+                    #appending to df list
+                    individual_dfs.append(individual_df)
+            else:
+                for i in range(num_individuals):
+                    #get column name
+                    x_col_name = 'x_mm_' + str(i+1)
+                    y_col_name = 'y_mm_' + str(i+1)
+                    
+                    #making df
+                    individual_df = pd.DataFrame({'x': df[x_col_name], 'y': df[y_col_name]})
+                    
+                    #appending to df list
+                    individual_dfs.append(individual_df)
+
 
             #combining dataframes
             all_df = pd.concat(individual_dfs)
@@ -452,19 +556,27 @@ class struct2df():
         If the type of data is JAABA behavior data, the method outputs a scores and processed scores plots.
         persecond argment defaults to true to plot data averaged per second. Set to False to plot per frame.
         framerate defaults to 30 fps. Check the framerate of your experiement and change accordingly.
-        The fly argument defaults to all, but this can be changed to a fly id or a list of fly ids.
+        The fly argument defaults to all, but this can be changed to a fly id as an integer, a list of fly ids as integers, or the name of a fly chamber as a string.
         plottitle and filename are optional arguments. filename adds to the beginning of the filename, there is a default name for the file.
         Optional arguments to save the plot and show the plot.
         scorethreshold defaults to None, but change to a float to set a lower limit to the processed behavior score
         burnin is the starting frame at which the plotting should start. If the plotting is set to seconds the method converts the frame to seconds.
         """
 
+
         #formatting fly parameter
         flyls = []
-        if not isinstance(fly, list) and fly != 'all':
-            flyls.append(fly)
-        else:
+        if isinstance(fly, list):
             flyls = fly
+        else:
+            if isinstance(fly, int):
+                flyls.append(fly)
+            elif fly != "all":
+                flyls = self.chambers[fly]
+            else:
+                flyls = None
+            
+
 
         
         #setting burnin
@@ -515,7 +627,7 @@ class struct2df():
                         ls = np.average(modls.reshape(-1, framerate), axis=1)
                     else:
                         ls = self.mat_dict['data'][int(i)-1]
-                    plt.plot(ls)
+                    plt.plot(ls, label=i)
 
                 #formating and showing the plot
                 handles, labels = plt.gca().get_legend_handles_labels()
@@ -641,6 +753,7 @@ class fly_experiment():
         #objects that can be referenced
         self.trx_ls = []
         self.trxs = {}
+        self.chambers = None
         self.perframes = {} #also includes any extracted parameters from trx
         self.jaaba_scores = {}
         self.jaaba_processed = {}
@@ -651,6 +764,7 @@ class fly_experiment():
 
             if i.dtype == 'trx':
                 self.trx_ls = i.trx_ls
+                self.chambers = i.chambers
 
                 for idx, j in enumerate(i.trx_ls):
                     self.trxs.update({idx+1: j})
@@ -773,8 +887,9 @@ class fly_experiment():
         Method to plot a pseudo-ethogram of all loaded behaviors for all flies, subset of flies, or single fly.
         The burnin can be set to the SECOND to start the plot at. Note that this is different from the struct2df method which takes the frame to start at.
         The average behavior score threshold can also be set, but defaults to zero.
-        The flies defaults to a plot of all flies but can be set to a subset of flies which is input as a list of flies or a single fly id.
+        The flies defaults to a plot of all flies but can be set to a subset of flies which is input as a list of fly ids as integers or a single fly id as an integer.
         'm' or 'f' can also be passed to select just male or female flies.
+        You may also pass in the name of a chamber as a string if you wish to plot all flies in one chmaber and if the trx `struct2df` instance contains a separate_chambers dictionary.
         """
 
         #selecting flies
@@ -803,6 +918,10 @@ class fly_experiment():
             flyls.sort()
             opacity = 0.5
 
+        elif self.chambers != None and fly in list(self.chambers.keys()):
+            flyls = list(self.chambers[fly])
+            opacity = 0.5
+
         else:
             flyls.append(fly)
             opacity = 1
@@ -811,50 +930,59 @@ class fly_experiment():
         #getting behaviors
         behaviors = list(self.jaaba_processed.keys())
 
-        #plotting
-        fig, ax = plt.subplots(len(behaviors), 1, sharex='col', figsize=(20,7))
-        for i in range(len(behaviors)):
-
-            #averaging dataframe per second
-            framesdf = self.jaaba_processed[behaviors[i]]
-            persec = framesdf.groupby(np.arange(len(framesdf))//framerate).mean()
-
-            for id in flyls:
-
-                ax[i].plot(persec[id].to_list(), label=id, alpha=opacity)
-                ax[i].fill_between([i for i in range(len(persec[id].to_list()))], persec[id].to_list(), alpha=opacity)
-                ax[i].set_ylabel(behaviors[i])
-
-                if scorethreshold != None:
-                    ax[i].set_ylim(bottom=scorethreshold, top=1)
-                else:
-                    ax[i].set_ylim(top=1)
-
-        plt.xlim(left=burnin, right=len(persec[id].to_list()))
-        plt.xlabel("seconds")
-        plt.suptitle(plottitle)
-
-        #formating and showing the plot
-        if len(flyls) != 1:
-            handles, labels = plt.gca().get_legend_handles_labels()
-            by_label = dict(zip(labels, handles))
-            leg = plt.legend(by_label.values(), by_label.keys(), loc='lower center', bbox_to_anchor=(0.5, -0.32), ncol=len(flyls))
-            for obj in leg.get_lines():
-                obj.set_linewidth(5)
-
-        if showplot:
-            plt.show()
-
-        if saveplot:
-            plt.savefig('{name}_ethogram_{flies}.png'.format(name=filename, flies=str(fly)))
+        #ethogram can only plot with more than one behavior, thus this if, else condition
+        if len(behaviors) > 1:
 
 
+            #plotting
+            fig, ax = plt.subplots(len(behaviors), 1, sharex='col', figsize=(20,7))
+
+            for i in range(len(behaviors)):
+
+                #averaging dataframe per second
+                framesdf = self.jaaba_processed[behaviors[i]]
+                persec = framesdf.groupby(np.arange(len(framesdf))//framerate).mean()
+
+                for id in flyls:
+
+                    ax[i].plot(persec[id].to_list(), label=id, alpha=opacity)
+                    ax[i].fill_between([i for i in range(len(persec[id].to_list()))], persec[id].to_list(), alpha=opacity)
+                    ax[i].set_ylabel(behaviors[i])
+
+                    if scorethreshold != None:
+                        ax[i].set_ylim(bottom=scorethreshold, top=1)
+                    else:
+                        ax[i].set_ylim(top=1)
+
+            plt.xlim(left=burnin, right=len(persec[id].to_list()))
+            plt.xlabel("seconds")
+            plt.suptitle(plottitle)
+
+            #formating and showing the plot
+            if len(flyls) != 1:
+                handles, labels = plt.gca().get_legend_handles_labels()
+                by_label = dict(zip(labels, handles))
+                leg = plt.legend(by_label.values(), by_label.keys(), loc='lower center', bbox_to_anchor=(0.5, -0.32), ncol=len(flyls))
+                for obj in leg.get_lines():
+                    obj.set_linewidth(5)
+
+            if showplot:
+                plt.show()
+
+            if saveplot:
+                plt.savefig('{name}_ethogram_{flies}.png'.format(name=filename, flies=str(fly)))
+
+
+        else:
+            print("\nWARNING: Only one behavior is present in this instance of `fly_experiment`. `.ethogram` cannot plot with only one behavior.\nPlease use the `.plot_timeseries` method on the `struct2df` instance instead.\n")
 
 
 
-    def network(self, dist_threshold=float('inf'), behavior=None, behavior_threshold=0.5, burnin=0, framerate=30, plottitle="", showplot=False, saveplot=True, filename=""):
+
+
+    def network(self, dist_threshold=float('inf'), behavior=None, behavior_threshold=0.5, burnin=0, framerate=30, chamber="all", plottitle="", showplot=False, saveplot=True, filename=""):
             """
-            
+            can now pass the chamber name as a string to `chamber`
             """
 
             #function for sorted() function key
@@ -871,7 +999,14 @@ class fly_experiment():
 
             #getting pairs
             colnames = list(self.perframes['dcenter'].columns)
-            colnames = ['dcenter_' + str(i) for i in colnames]
+
+            #condition for removing unwanted chambers
+            if chamber == "all":
+                colnames = ['dcenter_' + str(i) for i in colnames]
+            else:
+                colnames = ['dcenter_' + str(i) for i in self.chambers[chamber]]
+
+
 
             pairs = list(itertools.combinations(colnames, 2))
             connections = {}
@@ -892,29 +1027,52 @@ class fly_experiment():
             stack = stack[burnin:]
 
 
-
-
             #interactions list
             interactions_raw = []
 
-            #looping through flies
-            for i in self.flies:
 
-                #empty df
-                df = pd.DataFrame()
+            #single chamber or chamber selection
+            if chamber == "all":
+                #looping through flies
+                for i in self.flies:
 
-                #filtering for behavior unless no behavior parameter is given
-                if behavior != None:
-                    column_name = "{b}_processed_{f}".format(b=behavior,f=str(i))
-                    df = pd.concat([df, stack.loc[stack[column_name] >= behavior_threshold]])
-                else:
-                    df = pd.concat([df, stack])
+                    #empty df
+                    df = pd.DataFrame()
 
-                #new interaction column
-                df['interactions'] = df.apply(lambda row: [col for col in df.columns if col.startswith('dcenter_') and row[col] == row['dcenter_{f}'.format(f=str(i))] and row[col] <= dist_threshold], axis=1)
+                    #filtering for behavior unless no behavior parameter is given
+                    if behavior != None:
+                        column_name = "{b}_processed_{f}".format(b=behavior,f=str(i))
+                        df = pd.concat([df, stack.loc[stack[column_name] >= behavior_threshold]])
+                    else:
+                        df = pd.concat([df, stack])
 
-                #adding interactions to list
-                interactions_raw += df['interactions'].to_list()
+                    #new interaction column
+                    df['interactions'] = df.apply(lambda row: [col for col in df.columns if col.startswith('dcenter_') and row[col] == row['dcenter_{f}'.format(f=str(i))] and row[col] <= dist_threshold], axis=1)
+
+                    #adding interactions to list
+                    interactions_raw += df['interactions'].to_list()
+
+            else:
+                #looping through flies
+                for i in self.chambers[chamber]:
+
+                    #empty df
+                    df = pd.DataFrame()
+
+                    #filtering for behavior unless no behavior parameter is given
+                    if behavior != None:
+                        column_name = "{b}_processed_{f}".format(b=behavior,f=str(i))
+                        df = pd.concat([df, stack.loc[stack[column_name] >= behavior_threshold]])
+                    else:
+                        df = pd.concat([df, stack])
+
+                    #generating new interaction column
+                    df['interactions'] = df.apply(lambda row: [col for col in df.columns if col.startswith('dcenter_') and row[col] == row['dcenter_{f}'.format(f=str(i))] and row[col] <= dist_threshold], axis=1)
+
+                    #adding interactions to list
+                    interactions_raw += df['interactions'].to_list()
+
+
 
 
 
