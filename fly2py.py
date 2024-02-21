@@ -1,6 +1,17 @@
-#toolkit to extract data from Flytracker output for JAABA
-#Currently can only extract data from the JAABA trx file and any of the perframe directory files
-#Can also plot tracks from the x and y data in the trx file
+"""
+fly2py version 1.0
+Author: Phil Baldassari
+
+Description: Toolkit to extract data from Flytracker output for JAABA.
+Currently can only extract data from the JAABA trx file and any of the perframe directory files.
+Various plots can be generated including trajectory plots, occupancy heatmaps, pseudo-ethograms, and networks.
+Data can be easily output in human readable formats (e.g. csv).
+
+Usage: Import this module into your python script i.e.
+`import fly2py as f2p`. For uses of classes and function, see the docstrings.
+
+Dependancies: re, scipy.io, mat73, numpy, pandas, matplotlib.pyplot, itertools, networkx v3.1 (optional)
+"""
 
 #importing modules
 import re
