@@ -10,7 +10,7 @@ Data can be easily output in human readable formats (e.g. csv).
 Usage: Import this module into your python script i.e.
 `import fly2py as f2p`. For uses of classes and function, see the docstrings.
 
-Dependancies: re, scipy.io, mat73, numpy, pandas, matplotlib.pyplot, itertools, networkx v3.1 (optional)
+Dependancies: re, scipy.io, mat73, numpy, pandas, matplotlib.pyplot, itertools, networkx v3.3 (optional)
 """
 
 #importing modules
