@@ -11,15 +11,15 @@ Documentation will arrive soon.
 
 To set up the conda environment and install all necessary dependancies, use the FLY2PY.yml file in a terminal as follows:
 
-'''
+```
 conda env create -f FLY2PY.yml
-'''
+```
 
 Then, activate the environment in your terminal or your IDE:
 
-'''
+```
 conda activate FLY2PY
-'''
+```
 
 Now you can use fly2py!
 
